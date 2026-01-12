@@ -1,34 +1,37 @@
 package engine;
 
 import engine.utils.Sphere;
+import org.w3c.dom.ls.LSOutput;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.event.*;
 
 public class DrawEngine extends JPanel implements ActionListener {
-    private final Timer timer;
-    private Graphics2D graphics;
-
-    private static final int POINT_SIZE = 5;
-    private static final float LINE_SIZE = 1.0f;
-
-    private static final int FPS = 60;
-    private static final double DELTA = 1.0 / FPS;
-
-    private static final Color BACKGROUND = new Color(30, 30, 30);
-    private static final Color FOREGROUND = new Color(0, 150, 0);
+    public boolean drawVertices = true;
+    public boolean drawEdges = true;
 
     private double viewDistance = 1;
     private double angle = 0;
 
-    public boolean drawVertices = false;
-    public boolean drawEdges = true;
+    private final Timer timer;
+    private Graphics2D graphics;
 
-    private Sphere sphere1 = new Sphere(0.15,15, 15, 0, 0, 0);
-    private Sphere sphere2 = new Sphere(0.1,10, 10, 0.3, 0, 0);
-    private Sphere sphere3 = new Sphere(0.2,20, 20, 0.8, 0, 0);
+    private final int POINT_SIZE = 5;
+    private final float LINE_SIZE = 1.0f;
+
+    private final int FPS = 60;
+    private final double DELTA = 1.0 / FPS;
+
+    private final Color BACKGROUND = new Color(30, 30, 30);
+    private final Color FOREGROUND = new Color(0, 150, 0);
+
+    private double aspectRatio = 1.0;
+
+
+    private Sphere sphere1 = new Sphere(0.4,50, 50, 0, 0, 0);
+    private Sphere sphere2 = new Sphere(0.2,25, 25, 0.3, 0, 0);
+    private Sphere sphere3 = new Sphere(0.6,100, 100, 0.8, 0, 0);
 
     private double[][][] vertices = {
             sphere1.getSphereVertices(),
@@ -43,16 +46,41 @@ public class DrawEngine extends JPanel implements ActionListener {
     };
 
     // constructor
-    public DrawEngine() {
+    public DrawEngine(Dimension dimensions) {
+        setPreferredSize(dimensions);
+        aspectRatio = dimensions.getWidth() / dimensions.getHeight();
         timer = new Timer(1000 / FPS, this);
         timer.start();
+
+        addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                handleResize(getSize());
+            }
+        });
+
+        addMouseMotionListener(new MouseAdapter() {
+            public void mouseDragged(MouseEvent e) {
+                System.out.println(e);
+            }
+        });
+
+        addMouseWheelListener(new MouseAdapter() {
+            public void mouseWheelMoved(MouseWheelEvent e) {
+                handleZoom(e.getPreciseWheelRotation());
+            }
+        });
     }
+
+    double lastTime = 0;
 
     @Override
     public void actionPerformed(ActionEvent e) {
 //            deltaZ += 1 * DELTA;
         angle += 0.5 * DELTA;
+        System.out.println(1000 / timer.getDelay());
         repaint();
+        Toolkit.getDefaultToolkit().sync();
     }
 
     @Override
@@ -67,8 +95,12 @@ public class DrawEngine extends JPanel implements ActionListener {
         if (drawVertices) {
             for (int i = 0; i < vertices.length; i++) {
                 for (double[] vertex : vertices[i]) {
-                    double[] translatedPoint = translate_z(rotate_xy(rotate_xz(vertex, angle * (1 + i * 0.5)), angle * (1 + i * 1.5)), viewDistance);
-                    drawPoint(translateToCanvas(project(translatedPoint)), translatedPoint[2]);
+                    double[] rotateXY = rotateXY(vertex, angle * (1 + i * 0.5));
+                    double[] rotateXZ = rotateXZ(rotateXY, angle * (1 + i * 0.5));
+                    double[] rotateYZ = rotateYZ(rotateXZ, angle * (1 + i * 0.5));
+                    double[] translatedPoint = translateZ(rotateYZ, viewDistance);
+                    double[] translateAspect = translateAspectRatio(translatedPoint);
+                    drawPoint(translateToCanvas(project(translateAspect)), translateAspect[2]);
                 }
             }
         }
@@ -79,18 +111,34 @@ public class DrawEngine extends JPanel implements ActionListener {
                     for (int j = 0; j < edge.length; j++) {
                         double[] a = vertices[i][edge[j]];
                         double[] b = vertices[i][edge[(j + 1)%edge.length]];
-                        double[] translatedPointA = translate_z(rotate_xy(rotate_xz(a, angle * (1 + i * 0.5)), angle * (1 + i * 1.5)), viewDistance);
-                        double[] translatedPointB = translate_z(rotate_xy(rotate_xz(b, angle * (1 + i * 0.5)), angle * (1 + i * 1.5)), viewDistance);
-                        double thicknessModifier = (translatedPointA[2] + translatedPointB[2]) / 2;
+                        double[] rotateXYA = rotateXY(a, angle * (1 + i * 0.5));
+                        double[] rotateXZA = rotateXZ(rotateXYA, angle * (1 + i * 0.5));
+                        double[] rotateYZA = rotateYZ(rotateXZA, angle * (1 + i * 0.5));
+                        double[] rotateXYB = rotateXY(b, angle * (1 + i * 0.5));
+                        double[] rotateXZB = rotateXZ(rotateXYB, angle * (1 + i * 0.5));
+                        double[] rotateYZB = rotateYZ(rotateXZB, angle * (1 + i * 0.5));
+                        double[] translatedPointA = translateZ(rotateYZA, viewDistance);
+                        double[] translatedPointB = translateZ(rotateYZB, viewDistance);
+                        double[] translateAspectA = translateAspectRatio(translatedPointA);
+                        double[] translateAspectB = translateAspectRatio(translatedPointB);
+                        double thicknessModifier = (translateAspectA[2] + translateAspectB[2]) / 2;
                         drawLine(
-                                translateToCanvas(project(translatedPointA)),
-                                translateToCanvas(project(translatedPointB)),
+                                translateToCanvas(project(translateAspectA)),
+                                translateToCanvas(project(translateAspectB)),
                                 thicknessModifier
                         );
                     }
                 }
             }
         }
+    }
+
+    public void handleResize(Dimension dimensions) {
+        aspectRatio = dimensions.getWidth() / dimensions.getHeight();
+    }
+
+    private void handleZoom(double zoom) {
+        viewDistance += zoom * 0.1;
     }
 
     /**
@@ -100,8 +148,10 @@ public class DrawEngine extends JPanel implements ActionListener {
      */
     private void drawPoint(int[] vec2, double sizeModifier) {
         int size = (int) (POINT_SIZE / sizeModifier);
-        int offset = size / 2;
-        graphics.fillOval(vec2[0] - offset, vec2[1] - offset, size, size);
+        int offset = (int) (size * 0.5);
+//        graphics.fillOval(vec2[0] - offset, vec2[1] - offset, size, size);
+//        graphics.drawOval(vec2[0] - offset, vec2[1] - offset, size, size);
+        graphics.fillRect(vec2[0] - offset, vec2[1] - offset, size, size);
     }
 
     /**
@@ -110,7 +160,7 @@ public class DrawEngine extends JPanel implements ActionListener {
      * @param p2 int[]{x, y}
      */
     private void drawLine(int[] p1, int[] p2, double thicknessModifier) {
-        BasicStroke stroke = new BasicStroke((float)(LINE_SIZE / thicknessModifier));
+        BasicStroke stroke = new BasicStroke(Math.max(0.01f, (float)(LINE_SIZE / thicknessModifier)));
         graphics.setStroke(stroke);
         graphics.drawLine(p1[0], p1[1], p2[0], p2[1]);
     }
@@ -143,13 +193,21 @@ public class DrawEngine extends JPanel implements ActionListener {
         };
     }
 
+    private double[] translateAspectRatio(double[] vec3) {
+        return new double[]{
+                vec3[0] / aspectRatio,
+                vec3[1],
+                vec3[2]
+        };
+    }
+
     /**
      * Translate the Z axis by a given delta or distance
      * @param vec3 double[]{x, y, z}
      * @param delta double
      * @return A new double[]{x, y, z} with translated z.
      */
-    private double[] translate_z(double[] vec3, double delta) {
+    private double[] translateZ(double[] vec3, double delta) {
         return new double[]{
                 vec3[0],
                 vec3[1],
@@ -163,7 +221,7 @@ public class DrawEngine extends JPanel implements ActionListener {
      * @param angle double, in radians
      * @return A new double[]{x, y, z} with rotated yz.
      */
-    private double[] rotate_yz(double[] vec3, double angle) {
+    private double[] rotateYZ(double[] vec3, double angle) {
         double c = Math.cos(angle);
         double s = Math.sin(angle);
 
@@ -180,7 +238,7 @@ public class DrawEngine extends JPanel implements ActionListener {
      * @param angle double, in radians
      * @return A new double[]{x, y, z} with rotated xz.
      */
-    private double[] rotate_xz(double[] vec3, double angle) {
+    private double[] rotateXZ(double[] vec3, double angle) {
         double c = Math.cos(angle);
         double s = Math.sin(angle);
 
@@ -197,7 +255,7 @@ public class DrawEngine extends JPanel implements ActionListener {
      * @param angle double, in radians
      * @return A new double[]{x, y, z} with rotated xy.
      */
-    private double[] rotate_xy(double[] vec3, double angle) {
+    private double[] rotateXY(double[] vec3, double angle) {
         double c = Math.cos(angle);
         double s = Math.sin(angle);
 
