@@ -1,49 +1,38 @@
 package engine;
 
+import engine.utils.ModelInterface;
 import engine.utils.Sphere;
-import org.w3c.dom.ls.LSOutput;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.ArrayList;
 
 public class DrawEngine extends JPanel implements ActionListener {
-    public boolean drawVertices = true;
-    public boolean drawEdges = true;
+    public boolean drawVertices = false;
+    public boolean drawEdges = false;
+    public boolean drawFaces = false;
 
     private double viewDistance = 1;
     private double angle = 0;
 
     private final Timer timer;
-    private Graphics2D graphics;
 
-    private final int POINT_SIZE = 5;
-    private final float LINE_SIZE = 1.0f;
+    private int pointSize = 4;
+    private float lineSize = 1.0f;
 
-    private final int FPS = 60;
-    private final double DELTA = 1.0 / FPS;
+    public int FPS = 60;
+    private double DELTA = 1.0 / FPS;
 
-    private final Color BACKGROUND = new Color(30, 30, 30);
-    private final Color FOREGROUND = new Color(0, 150, 0);
+    public Color backgroundColor = new Color(30, 30, 30);
+    public Color pointColor = new Color(0, 180, 0, 255);
+    public Color lineColor = new Color(0, 110, 0, 255);
+    public Color faceColor = new Color(0, 150, 0, 255);
 
     private double aspectRatio = 1.0;
 
-
-    private Sphere sphere1 = new Sphere(0.4,50, 50, 0, 0, 0);
-    private Sphere sphere2 = new Sphere(0.2,25, 25, 0.3, 0, 0);
-    private Sphere sphere3 = new Sphere(0.6,100, 100, 0.8, 0, 0);
-
-    private double[][][] vertices = {
-            sphere1.getSphereVertices(),
-            sphere2.getSphereVertices(),
-            sphere3.getSphereVertices(),
-    };
-
-    private int[][][] indices = {
-            sphere1.getSphereIndices(),
-            sphere2.getSphereIndices(),
-            sphere3.getSphereIndices(),
-    };
+    private final ArrayList<double[][]> vertices = new ArrayList<>();
+    private final ArrayList<int[][]> indices = new ArrayList<>();
 
     // constructor
     public DrawEngine(Dimension dimensions) {
@@ -76,9 +65,8 @@ public class DrawEngine extends JPanel implements ActionListener {
 
     @Override
     public void actionPerformed(ActionEvent e) {
-//            deltaZ += 1 * DELTA;
         angle += 0.5 * DELTA;
-        System.out.println(1000 / timer.getDelay());
+//        System.out.println(1000 / timer.getDelay());
         repaint();
         Toolkit.getDefaultToolkit().sync();
     }
@@ -87,30 +75,61 @@ public class DrawEngine extends JPanel implements ActionListener {
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2d = (Graphics2D) g;
-        graphics = g2d;
-        setBackground(BACKGROUND);
+        setBackground(backgroundColor);
 
-        g2d.setColor(FOREGROUND);
+        if (this.vertices.isEmpty() && this.indices.isEmpty()) {
+            return;
+        }
 
         if (drawVertices) {
-            for (int i = 0; i < vertices.length; i++) {
-                for (double[] vertex : vertices[i]) {
+            for (int i = 0; i < vertices.size(); i++) {
+                for (double[] vertex : vertices.get(i)) {
                     double[] rotateXY = rotateXY(vertex, angle * (1 + i * 0.5));
                     double[] rotateXZ = rotateXZ(rotateXY, angle * (1 + i * 0.5));
                     double[] rotateYZ = rotateYZ(rotateXZ, angle * (1 + i * 0.5));
                     double[] translatedPoint = translateZ(rotateYZ, viewDistance);
                     double[] translateAspect = translateAspectRatio(translatedPoint);
-                    drawPoint(translateToCanvas(project(translateAspect)), translateAspect[2]);
+                    drawPoint(g2d, translateToCanvas(project(translateAspect)), translateAspect[2]);
+                }
+            }
+        }
+
+        if (drawFaces) {
+            for (int i = 0; i < indices.size(); i++) {
+                for (int[] edge : indices.get(i)) {
+                    int[] xPositions = new int[3];
+                    int[] yPositions = new int[3];
+                    double colorModifier = 0;
+
+                    for (int j = 0; j < edge.length; j++) {
+                        double[] vertex = vertices.get(i)[edge[j]];
+//                        if (vertex[2] > viewDistance) {
+//                            break;
+//                        }
+                        double[] rotateXY = rotateXY(vertex, this.angle * (1 + i * 0.5));
+                        double[] rotateXZ = rotateXZ(rotateXY, this.angle * (1 + i * 0.5));
+                        double[] rotateYZ = rotateYZ(rotateXZ, this.angle * (1 + i * 0.5));
+                        double[] translatedPoint = translateZ(rotateYZ, this.viewDistance);
+                        double[] translateAspect = translateAspectRatio(translatedPoint);
+                        int[] canvasCoords = translateToCanvas(project(translateAspect));
+                        xPositions[j] = canvasCoords[0];
+                        yPositions[j] = canvasCoords[1];
+                        if (colorModifier == 0) {
+                            colorModifier = translateAspect[2];
+                        }
+                    }
+
+                    drawPolygon(g2d, xPositions, yPositions, colorModifier);
                 }
             }
         }
 
         if (drawEdges) {
-            for (int i = 0; i < indices.length; i++) {
-                for (int[] edge : indices[i]) {
+            for (int i = 0; i < indices.size(); i++) {
+                for (int[] edge : indices.get(i)) {
                     for (int j = 0; j < edge.length; j++) {
-                        double[] a = vertices[i][edge[j]];
-                        double[] b = vertices[i][edge[(j + 1)%edge.length]];
+                        double[] a = vertices.get(i)[edge[j]];
+                        double[] b = vertices.get(i)[edge[(j + 1)%edge.length]];
                         double[] rotateXYA = rotateXY(a, angle * (1 + i * 0.5));
                         double[] rotateXZA = rotateXZ(rotateXYA, angle * (1 + i * 0.5));
                         double[] rotateYZA = rotateYZ(rotateXZA, angle * (1 + i * 0.5));
@@ -123,6 +142,7 @@ public class DrawEngine extends JPanel implements ActionListener {
                         double[] translateAspectB = translateAspectRatio(translatedPointB);
                         double thicknessModifier = (translateAspectA[2] + translateAspectB[2]) / 2;
                         drawLine(
+                                g2d,
                                 translateToCanvas(project(translateAspectA)),
                                 translateToCanvas(project(translateAspectB)),
                                 thicknessModifier
@@ -133,36 +153,74 @@ public class DrawEngine extends JPanel implements ActionListener {
         }
     }
 
-    public void handleResize(Dimension dimensions) {
+    /**
+     * Main method to add models to the engine.
+     * @param model The model to add, this must implement the ModelInterface
+     */
+    public void addModel(ModelInterface model) {
+        this.vertices.add(model.getVertices());
+        this.indices.add(model.getIndices());
+    }
+
+    /**
+     * Called on a canvas resize to calculate the new aspect ratio
+     * @param dimensions Dimensions of the new canvas size, passed by componentResize
+     */
+    private void handleResize(Dimension dimensions) {
         aspectRatio = dimensions.getWidth() / dimensions.getHeight();
     }
 
+    /**
+     * Zooms the canvas in or out
+     * @param zoom double received from mouseWheelEvent, positive zooms in
+     */
     private void handleZoom(double zoom) {
-        viewDistance += zoom * 0.1;
+        viewDistance = Math.clamp(viewDistance - zoom * 0.1, 0.5, 10);
     }
 
     /**
      * Draws a filled oval to the canvas at the given coordinates.
+     * @param graphics Graphics2D object
      * @param vec2 int[]{x, y}
      * @param sizeModifier double, higher means smaller
      */
-    private void drawPoint(int[] vec2, double sizeModifier) {
-        int size = (int) (POINT_SIZE / sizeModifier);
+    private void drawPoint(Graphics2D graphics, int[] vec2, double sizeModifier) {
+        graphics.setColor(pointColor);
+        int size = (int) (pointSize / sizeModifier);
         int offset = (int) (size * 0.5);
 //        graphics.fillOval(vec2[0] - offset, vec2[1] - offset, size, size);
-//        graphics.drawOval(vec2[0] - offset, vec2[1] - offset, size, size);
         graphics.fillRect(vec2[0] - offset, vec2[1] - offset, size, size);
     }
 
     /**
      * Draw a line between two points.
+     * @param graphics Graphics2D object
      * @param p1 int[]{x, y}
      * @param p2 int[]{x, y}
+     * @param thicknessModifier any double, higher means thinner line, z axis preferred
      */
-    private void drawLine(int[] p1, int[] p2, double thicknessModifier) {
-        BasicStroke stroke = new BasicStroke(Math.max(0.01f, (float)(LINE_SIZE / thicknessModifier)));
+    private void drawLine(Graphics2D graphics, int[] p1, int[] p2, double thicknessModifier) {
+        graphics.setColor(lineColor);
+        BasicStroke stroke = new BasicStroke(Math.max(0.01f, (float)(lineSize / thicknessModifier)));
         graphics.setStroke(stroke);
         graphics.drawLine(p1[0], p1[1], p2[0], p2[1]);
+    }
+
+    /**
+     * Draw a 3 point polygon
+     * @param graphics Graphics2D object
+     * @param xArray int[3] with x points
+     * @param yArray int[3] with y points
+     * @param colorModifier any double, used to calculate new face color
+     */
+    private void drawPolygon(Graphics2D graphics, int[] xArray, int[] yArray, double colorModifier) {
+        int red = Math.clamp((int)(faceColor.getRed() * colorModifier), 0, 255);
+        int green = Math.clamp((int)(faceColor.getGreen() * colorModifier), 0, 255);
+        int blue = Math.clamp((int)(faceColor.getBlue() * colorModifier), 0, 255);
+        int alpha = Math.clamp((int)(faceColor.getAlpha() - colorModifier * 150), 0, 255);
+        Color fillColor = new Color(red, green, blue, alpha);
+        graphics.setColor(fillColor);
+        graphics.fillPolygon(xArray, yArray, 3);
     }
 
     /**
@@ -193,6 +251,11 @@ public class DrawEngine extends JPanel implements ActionListener {
         };
     }
 
+    /**
+     *
+     * @param vec3 double[]{x, y, z}
+     * @return A new vec3 double[]{x, y, z} with corrected x in case the viewport is not square
+     */
     private double[] translateAspectRatio(double[] vec3) {
         return new double[]{
                 vec3[0] / aspectRatio,

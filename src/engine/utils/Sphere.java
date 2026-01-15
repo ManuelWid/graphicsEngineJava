@@ -1,14 +1,19 @@
 package engine.utils;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
-public class Sphere {
-    public double radius;
-    public int segments;
-    public int rings;
-    public double x_pos;
-    public double y_pos;
-    public double z_pos;
+public class Sphere implements ModelInterface {
+    private final double radius;
+    private final int segments;
+    private final int rings;
+    private final double x_pos;
+    private final double y_pos;
+    private final double z_pos;
+    private final double[][] vertices;
+    private final double[][] verticesNormalized;
+    private final int[][] indices;
 
     public Sphere(double radius, int segments, int rings, double x, double y, double z) {
         this.radius = radius;
@@ -17,9 +22,25 @@ public class Sphere {
         this.x_pos = x;
         this.y_pos = y;
         this.z_pos = z;
+
+        this.vertices = calculateVertices();
+        this.verticesNormalized = calculateVerticesNormalized();
+        this.indices = calculateIndices();
     }
 
-    public double[][] getSphereVertices() {
+    public double[][] getVertices() {
+        return this.vertices;
+    }
+
+    public double[][] getVerticesNormalized() {
+        return this.verticesNormalized;
+    }
+
+    public int[][] getIndices() {
+        return this.indices;
+    }
+
+    private double[][] calculateVertices() {
         ArrayList<double[]> vertices = new ArrayList<>();
 
         for (int y = 0; y <= this.rings; y++) {
@@ -42,22 +63,22 @@ public class Sphere {
         return vertices.toArray(new double[0][]);
     }
 
-    public double[][] getSphereVerticesNormalized() {
+    private double[][] calculateVerticesNormalized() {
         ArrayList<double[]> vertices = new ArrayList<>();
 
-        for (int y = 0; y <= rings; y++) {
-            for (int x = 0; x <= segments; x++) {
-                double theta = ((double) y / rings) * Math.PI;
-                double phi = ((double) x / segments) * 2 * Math.PI;
+        for (int y = 0; y <= this.rings; y++) {
+            for (int x = 0; x <= this.segments; x++) {
+                double theta = ((double) y / this.rings) * Math.PI;
+                double phi = ((double) x / this.segments) * 2 * Math.PI;
 
-                double vx = radius * Math.sin(theta) * Math.cos(phi);
-                double vy = radius * Math.cos(theta);
-                double vz = radius * Math.sin(theta) * Math.sin(phi);
+                double vx = this.radius * Math.sin(theta) * Math.cos(phi);
+                double vy = this.radius * Math.cos(theta);
+                double vz = this.radius * Math.sin(theta) * Math.sin(phi);
 
                 vertices.add(new double[]{
-                        Math.round(vx / radius * 1000) / 1000.0,
-                        Math.round(vy / radius * 1000) / 1000.0,
-                        Math.round(vz / radius * 1000) / 1000.0
+                        Math.round(vx / this.radius * 1000) / 1000.0,
+                        Math.round(vy / this.radius * 1000) / 1000.0,
+                        Math.round(vz / this.radius * 1000) / 1000.0
                 });
             }
         }
@@ -65,7 +86,7 @@ public class Sphere {
         return vertices.toArray(new double[0][]);
     }
 
-    public int[][] getSphereIndices() {
+    private int[][] calculateIndices() {
         ArrayList<int[]> indices = new ArrayList<>();
 
         for (int y = 0; y <= this.rings; y++) {
