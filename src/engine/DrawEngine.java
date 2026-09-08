@@ -1,7 +1,6 @@
 package engine;
 
 import engine.utils.ModelInterface;
-import engine.utils.Sphere;
 
 import javax.swing.*;
 import java.awt.*;

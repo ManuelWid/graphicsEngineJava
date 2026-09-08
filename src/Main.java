@@ -13,9 +13,14 @@ public class Main {
     public static void main(String[] args) {
         initializeJFrame();
         engine.drawEdges = true;
+        engine.drawVertices = false;
 
-        Sphere sphere1 = new Sphere(0.4,50, 50, 0, 0, 0);
+        Sphere sphere1 = new Sphere(0.4,40, 40, 0, 0, 0);
+        Sphere sphere2 = new Sphere(0.2,20, 20, 0.3, 0, 0);
+        Sphere sphere3 = new Sphere(0.6,70, 70, -0.5, 0, 0);
         engine.addModel(sphere1);
+//        engine.addModel(sphere2);
+//        engine.addModel(sphere3);
     }
 
     private static void initializeJFrame() {
